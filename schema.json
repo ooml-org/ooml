@@ -857,7 +857,7 @@
 			"additionalProperties": false
 		},
 		"nestedAttribute": {
-			"description": "An attribute of kind 'nested': an ad hoc, locally-scoped data structure with no independent identity, described inline by its own 'attributes' property. Supports arbitrary nesting depth via recursion.",
+			"description": "An attribute of kind 'nested': an ad hoc, locally-scoped data structure with no independent identity. Its shape comes from exactly one of 'attributes' (an inline sub-attribute map) or 'type' (a class FQN range whose full resolved shape is borrowed and embedded). 'type' MUST NOT be 'self'. Supports arbitrary nesting depth via recursion.",
 			"allOf": [
 				{
 					"$ref": "#/$defs/commonAttributeProperties"
@@ -872,6 +872,9 @@
 							"$ref": "#/$defs/attributesObject",
 							"minProperties": 1
 						},
+						"type": {
+							"$ref": "#/$defs/classFqnRangeNoSelf"
+						},
 						"name": {},
 						"description": {},
 						"required": {},
@@ -883,10 +886,31 @@
 						"deprecated": {}
 					},
 					"required": [
-						"kind",
-						"attributes"
+						"kind"
 					],
-					"additionalProperties": false
+					"additionalProperties": false,
+					"oneOf": [
+						{
+							"required": [
+								"attributes"
+							],
+							"not": {
+								"required": [
+									"type"
+								]
+							}
+						},
+						{
+							"required": [
+								"type"
+							],
+							"not": {
+								"required": [
+									"attributes"
+								]
+							}
+						}
+					]
 				}
 			]
 		},
@@ -1029,6 +1053,19 @@
 			"additionalProperties": {
 				"$ref": "#/$defs/useEntry"
 			}
+		},
+		"classFqnRangeNoSelf": {
+			"allOf": [
+				{
+					"$ref": "#/$defs/classFqnRange"
+				},
+				{
+					"not": {
+						"const": "self"
+					}
+				}
+			],
+			"description": "A class FQN range, excluding the literal 'self' token. Used where self-embedding would be a guaranteed structural cycle."
 		}
 	},
 	"oneOf": [

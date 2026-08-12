@@ -273,6 +273,7 @@ The following changes are breaking and MUST increment the MAJOR version:
 - Renaming an attribute
 - Changing an attribute's `kind`
 - Narrowing an attribute's `type`
+- Switching a `nested` attribute between the inline `attributes` form and the type-borrowed `type` form, or changing which class a type-borrowed `nested` attribute's `type` points at (to an incompatible class not already covering the same shape)
 - Changing an attribute from optional to required
 - Changing the `valueType` or `valueKind` of a `list`, `set`, or `map` attribute
 - Changing the `keyType` or `keyKind` of a `map` attribute
@@ -410,7 +411,7 @@ A global attribute is a JSON object published as a standalone artefact:
 | `attributes` | object | REQUIRED (where applicable) | Map of sub-attribute identifier to sub-attribute definition. REQUIRED and non-empty when `kind` is `nested`; not present otherwise. Same structure and rules as a class's `attributes` property (§9). |
 | `deprecated` | string | OPTIONAL | If present, this artefact is deprecated; the value is the deprecation message. MUST be a non-empty string. Omit when not deprecated. |
 
-All additional type-specific properties that apply to an attribute of the given `kind` (e.g. `minLength`, `pattern`, `precision`, `scale`, `valueKind`, `valueType`, `keyType`) also apply to global attributes. A global attribute of `kind` `nested` allows the same recursive nesting as a class attribute of `kind` `nested` (§9.10) — this is the mechanism for publishing a reusable, independently-versioned nested shape, referenced from any class the ordinary way via `"kind": "attribute"`.
+All additional type-specific properties that apply to an attribute of the given `kind` (e.g. `minLength`, `pattern`, `precision`, `scale`, `valueKind`, `valueType`, `keyType`) also apply to global attributes. A global attribute of `kind` `nested` supports both forms available to a class attribute of that kind (§9.10): an inline `attributes` map, or a `type` borrowing a class's full resolved shape. Either way, the published global attribute becomes a reusable, independently-versioned nested shape, referenced from any class the ordinary way via `"kind": "attribute"`.
 
 ### 7.3 FQN of a Global Attribute
 
@@ -686,11 +687,11 @@ An ordered sequence of values of a declared value type. Duplicate values are per
 | Property | Required | Default | Description |
 |----------|----------|---------|-------------|
 | `valueKind` | REQUIRED | — | Kind of each value. Same vocabulary as attribute kinds. |
-| `valueType` | REQUIRED (where applicable) | — | Shape of each value. A primitive type name, class FQN range, global attribute FQN range, or `"self"`, consistent with `valueKind` — **except** when `valueKind` is `nested`, in which case `valueType` is itself a map of sub-attribute identifier to sub-attribute definition, using exactly the same structure as an `attributes` property (§9.10). For `valueKind: "enum"`, valid values are subtypes of the named class, excluding the named class itself. |
+| `valueType` | REQUIRED (where applicable) | — | Shape of each value. A primitive type name, class FQN range, global attribute FQN range, or `"self"`, consistent with `valueKind` — **except** when `valueKind` is `nested`, in which case `valueType` is either an inline map of sub-attribute identifier to sub-attribute definition (using exactly the same structure as an `attributes` property) or a class FQN range whose full resolved shape is borrowed, following exactly the same two-form rule as a singular `nested` attribute (§9.10). `"self"` is never valid here, even in the class-FQN-range case. For `valueKind: "enum"`, valid values are subtypes of the named class, excluding the named class itself. |
 | `minItems` | OPTIONAL | — | Minimum number of values (inclusive). |
 | `maxItems` | OPTIONAL | — | Maximum number of values (inclusive). |
 
-`valueType` and `attributes` play different roles and are never interchangeable: `attributes` (§8.2, §9.10) describes what the artefact or attribute *declaring it* is itself composed of. `valueType` describes the shape of *each value held by* a collection — the collection attribute itself is not that shape, its elements are. When that shape has no external name (`valueKind: "nested"`), `valueType` carries it inline; when it does (every other `valueKind`), `valueType` is a compact string identifier for it. The property differs in representation, never in role.
+`valueType` and `attributes` play different roles and are never interchangeable: `attributes` (§8.2, §9.10) describes what the artefact or attribute *declaring it* is itself composed of. `valueType` describes the shape of *each value held by* a collection — the collection attribute itself is not that shape, its elements are. For `valueKind: "nested"`, that shape is given either inline (an ad hoc `attributes`-style map with no external name) or by borrowing a published class's shape (a compact class FQN range, §9.10); every other `valueKind` always uses the latter, string-identifier form. The property differs in representation, never in role.
 
 ### 9.7 Kind: `set`
 
@@ -811,7 +812,14 @@ Here `postalNumber`'s own `pattern` and `description` are narrowed and clarified
 
 ### 9.10 Kind: `nested`
 
-An ad hoc, locally-scoped data structure with no independent identity, described inline by its own `attributes` property — using the same structure as a class's `attributes` property (§9.1). A `nested` attribute has no `type`; its shape is entirely defined by its sub-attributes.
+An ad hoc, locally-scoped data structure with no independent identity. Its shape comes from exactly one of two sources:
+
+- **`attributes`** — an inline sub-attribute map, described directly on the attribute, using the same structure as a class's `attributes` property (§9.1).
+- **`type`** — a class FQN range whose full resolved shape (its own attributes plus everything it inherits, §11.2) is borrowed and embedded. The referenced class is never instantiated by this; only its shape is used. `abstract` and `final` on the referenced class are irrelevant here — a `nested` attribute may borrow the shape of an abstract class, or of a class nothing else is permitted to extend, since shape-borrowing is neither instantiation nor inheritance.
+
+A `nested` attribute MUST have exactly one of `attributes` or `type` — never both, never neither (rule T10). `type`, when present, MUST NOT be `"self"`: a class borrowing its own full shape is a guaranteed structural cycle, and is rejected outright rather than left to general cycle detection (rule T13).
+
+**Inline form:**
 
 ```json
 "homeAddress": {
@@ -836,19 +844,46 @@ An ad hoc, locally-scoped data structure with no independent identity, described
 }
 ```
 
+**Type-borrowed form**, embedding a published, independently-reusable class's shape without instantiating or referencing it:
+
+```json
+"coordinates": {
+	"kind": "nested",
+	"type": "com.example.geo/GeoCoordinates@^1.0.0",
+	"name": "Geographic Coordinates",
+	"description": "Precise coordinates for this address, used for delivery routing."
+}
+```
+
+The same class remains fully usable as an ordinary `object` reference elsewhere — a `nested` attribute never claims exclusive use of a class's shape:
+
+```json
+"lastKnownVehicleLocation": {
+	"kind": "object",
+	"type": "com.example.geo/GeoCoordinates@^1.0.0",
+	"name": "Last Known Vehicle Location",
+	"description": "A separately-stored, independently-updatable location record for the delivery vehicle."
+}
+```
+
 | Property | Required | Description |
 |----------|----------|-------------|
-| `attributes` | REQUIRED | Map of sub-attribute identifier to sub-attribute definition. MUST be non-empty. Uses the same structure and validation rules as a class's `attributes` property (§9.1, §8.2). |
+| `attributes` | Exactly one of `attributes` or `type` REQUIRED | Map of sub-attribute identifier to sub-attribute definition. When present, MUST be non-empty. Uses the same structure and validation rules as a class's `attributes` property (§9.1, §8.2). |
+| `type` | Exactly one of `attributes` or `type` REQUIRED | A class FQN range whose full resolved shape is embedded. MUST NOT be `"self"`. |
 
-A sub-attribute MAY itself be of kind `nested`, allowing arbitrarily deep nesting. Each level's `attributes` map follows exactly the same rules as any other attribute map, including its own attribute identifiers, common properties, and kind-specific properties. A global attribute MAY also be of kind `nested` (§7.2), providing a way to publish a reusable, independently-versioned nested shape rather than declaring the same structure inline in every class that needs it.
+Whichever form is used, a sub-attribute MAY itself be of kind `nested` (in either form), allowing arbitrarily deep nesting. A global attribute MAY also be of kind `nested`, in either form (§7.2) — the type-borrowed form is itself a natural way to publish a reusable nested shape, alongside simply publishing the source class and letting classes borrow it directly, as shown above.
 
-A `nested` attribute MUST NOT have `type`, `valueKind`, `valueType`, `keyKind`, or `keyType`. `extends`, `use`, and `metadata` are not valid within a nested attribute's structure — a nested attribute is not a class, and does not carry class-level concepts such as inheritance or an independent metadata surface.
+A `nested` attribute MUST NOT have `valueKind`, `valueType`, `keyKind`, or `keyType`. `extends`, `use`, and `metadata` are not valid within a nested attribute's inline structure — a nested attribute is not a class, and does not carry class-level concepts such as inheritance or an independent metadata surface, regardless of which form supplies its shape.
 
-A `list`, `set`, or `map` MAY hold nested values via `valueKind: "nested"`, in which case the collection attribute's `valueType` — not `attributes` — carries the sub-attribute map, since it is each collection element that has the nested shape, not the collection attribute itself (§9.6). A map's *keys* MUST NOT be nested (§9.8).
+A `list`, `set`, or `map` MAY hold nested values via `valueKind: "nested"`, in which case the collection attribute's `valueType` carries either an inline sub-attribute map or a class FQN range, following exactly the same two-form rule as a singular `nested` attribute (§9.6). A map's *keys* MUST NOT be nested (§9.8).
 
-Nested attributes have no FQN of their own: they are never resolved independently and never appear as nodes in the dependency graph. Any dependency arising from a sub-attribute (for example, a `class`-kind sub-attribute referencing another class) attaches to the nearest containing artefact — the class or global attribute the nested attribute is, at any depth, ultimately declared within — exactly as an ordinary top-level attribute's dependencies do. Nesting is structurally transparent for dependency-graph purposes: it introduces no new edge type or node type (§14.2).
+### 9.11 Nested Attributes and the Dependency Graph
 
-A sub-attribute MAY be addressed, for documentation or tooling purposes, using the dotted extension of the owned attribute FQN form (§4.2): `com.example.hr/Employee@1.2.0#homeAddress.streetName`. This identifies the sub-attribute's position within its containing artefact; it is not an independent FQN, since a sub-attribute has no identity beyond that position.
+The **inline form** introduces no edge of its own: it has no `type` and no FQN. Dependencies arising from its sub-attributes (at any depth) attach to the nearest containing artefact — the class or global attribute the nested structure is ultimately declared within — exactly as an ordinary top-level attribute's dependencies do. Nested attributes are never independently resolvable and never appear as their own node in the dependency graph, regardless of form.
+
+The **type-borrowed form** is different: it is a genuinely structural dependency, exactly like `attribute-import`, since the containing artefact's own shape now incorporates the referenced class's shape. It MUST participate in cycle detection alongside `extends`, `attribute-import`, and `metadata` (§14.2, §14.4) — unlike an `object`, `class`, or `enum` reference to the same class, which would remain identity-only and cycle-exempt. The same class may be referenced both ways in the same model without conflict: a `nested` attribute borrowing its shape, and an `object`/`class`/`enum` attribute referencing it by identity, are structurally independent relationships.
+
+A sub-attribute MAY be addressed, for documentation or tooling purposes, using the dotted extension of the owned attribute FQN form (§4.2): `com.example.hr/Employee@1.2.0#homeAddress.streetName`. This identifies the sub-attribute's position within its containing artefact; it is not an independent FQN, since a sub-attribute has no identity beyond that position. This applies identically regardless of whether the sub-attribute's shape came from an inline `attributes` map or was borrowed via `type`.
 
 ---
 
@@ -1235,12 +1270,13 @@ Edges arise from the following sources:
 | `class` attribute `type` property | Class reference dependency: the class refers to another class itself, or any of its subtypes |
 | `enum` attribute `type` property | Enum root dependency: the class references a class as an enum root |
 | `attribute`-kind attribute `type` property | Attribute import dependency: the class uses a standalone global attribute |
+| `nested`-kind attribute `type` property (type-borrowed form) | Shape embedding dependency: the class's own shape incorporates the referenced class's full resolved shape (§9.11) |
 | `list`, `set`, or `map` `valueType`/`keyType` property | Collection element dependency |
 | `metadata` object key (each entry) | Metadata schema dependency: the class carries metadata conforming to a metadata schema class |
 
-A self-referential `"self"` token (§4.3) resolves to the declaring class's own FQN once expanded, and is treated identically to an explicit self-referential FQN for edge purposes.
+A self-referential `"self"` token (§4.3) resolves to the declaring class's own FQN once expanded, and is treated identically to an explicit self-referential FQN for edge purposes. This does not apply to a `nested` attribute's `type` — `"self"` is not a valid value there (§9.10, rule T13).
 
-A `nested`-kind attribute introduces no edge of its own: it has no `type` and no FQN. Edges arising from its sub-attributes (at any depth) are attributed to the nearest containing artefact — the class or global attribute the nested structure is ultimately declared within — exactly as if those sub-attributes were declared directly on that artefact. Nesting is structurally transparent to the dependency graph (§9.10).
+A `nested`-kind attribute's inline form (`attributes`) introduces no edge of its own: it has no `type` and no FQN. Edges arising from its sub-attributes (at any depth) are attributed to the nearest containing artefact, exactly as if those sub-attributes were declared directly on that artefact. The type-borrowed form (`type`) is different: it is a genuine structural dependency, and MUST participate in cycle detection alongside `extends`, `attribute-import`, and `metadata` (§9.11, §14.4).
 
 The `use` property (§12) introduces no edge of its own either. An FQN range used as a `use` key identifies an attribute that is, by construction, already reachable via an existing `extends` or `attribute-import` edge — `use` only ever adjusts something already structurally present, never references anything new.
 
@@ -1262,7 +1298,7 @@ For MAJOR version 0, `^0.y.z` is treated as `~0.y.z`, reflecting the initial-dev
 
 ### 14.4 Acyclicity
 
-The dependency graph MUST be acyclic across `extends`, `attribute-import`, and `metadata` edges. Self-referential `object`, `class`, and `enum` attribute edges — including those declared via `"self"` — are exempt: all three are references by identity to a class or an instance, not structural embedding, and do not constitute a definition cycle (see §19.6 for the underlying rationale).
+The dependency graph MUST be acyclic across `extends`, `attribute-import`, `metadata`, and the type-borrowed form of `nested` attributes (§9.11) — this last one being structurally identical in kind to `attribute-import`, since it too causes one artefact's shape to genuinely incorporate another's. Self-referential `object`, `class`, and `enum` attribute edges — including those declared via `"self"` — remain exempt: all three are references by identity to a class or an instance, not structural embedding, and do not constitute a definition cycle (see §19.6 for the underlying rationale). `"self"` is not a valid `type` for a `nested` attribute (rule T13), precisely because that exemption does not extend to it.
 
 ### 14.5 Resolution
 
@@ -1361,10 +1397,11 @@ An OOML artefact (class or global attribute) is **valid** if and only if all app
 | T06 | When `valueKind` is `primitive`, `valueType` MUST be a valid primitive type name (§6). |
 | T07 | When `valueKind` is `object`, `class`, or `enum`, `valueType` MUST resolve to a known class. When `valueKind` is `attribute`, `valueType` MUST resolve to a known global attribute. For `valueKind: "enum"`, valid values are subtypes of the resolved class, excluding the resolved class itself. |
 | T08 | The `keyType` on an attribute of kind `map` MUST be a primitive type name from §7. |
-| T09 | An attribute of kind `nested` MUST NOT have `type`, `valueKind`, `valueType`, `keyKind`, or `keyType`. |
-| T10 | An attribute of kind `nested` MUST have a non-empty `attributes` property, validated per the same rules as a class's `attributes` property (§9.1, §8.2). This applies equally to a global attribute of kind `nested` (§7.2). |
-| T11 | When `valueKind` is `nested`, `valueType` MUST be a non-empty map of sub-attribute identifier to sub-attribute definition, validated per the same rules as an `attributes` property (§9.1, §8.2), rather than a string. |
+| T09 | An attribute of kind `nested` MUST NOT have `valueKind`, `valueType`, `keyKind`, or `keyType`. |
+| T10 | An attribute of kind `nested` MUST have exactly one of `attributes` or `type` — never both, never neither. When `attributes` is present, it MUST be non-empty and is validated per the same rules as a class's `attributes` property (§9.1, §8.2). When `type` is present, it MUST resolve to a known class, and the embedded shape is that class's full resolved attribute set (its own attributes plus everything it inherits, §11.2). This applies equally to a global attribute of kind `nested` (§7.2). |
+| T11 | When `valueKind` is `nested`, `valueType` MUST be either a non-empty inline map of sub-attribute identifier to sub-attribute definition (validated per the same rules as an `attributes` property, §9.1, §8.2), or a class FQN range whose full resolved shape is embedded — following exactly the same two-form rule as `attributes`/`type` on a singular `nested` attribute (rule T10). |
 | T12 | `keyKind` MUST NOT be `nested`. |
+| T13 | `type` on an attribute of kind `nested`, and `valueType` on a `list`, `set`, or `map` with `valueKind: "nested"` when given as a class FQN range, MUST NOT be `"self"`. |
 
 ### 16.3 Inheritance Rules
 
@@ -1407,7 +1444,7 @@ An OOML artefact (class or global attribute) is **valid** if and only if all app
 | Rule ID | Description |
 |---------|-------------|
 | D01 | All version ranges appearing in `extends`, attribute `type`/`valueType`/`keyType` properties, `use` FQN-range keys, and `metadata` object keys MUST be syntactically valid per §14.3. |
-| D02 | The dependency graph, derived from `extends`, `attribute-import`, and `metadata` edges, MUST be acyclic. Self-referential `object`, `class`, and `enum` attribute edges are exempt (they are references by identity to a class or an instance, not structural embedding). |
+| D02 | The dependency graph, derived from `extends`, `attribute-import`, `metadata`, and the type-borrowed form of `nested` attributes (§9.11), MUST be acyclic. Self-referential `object`, `class`, and `enum` attribute edges are exempt (they are references by identity to a class or an instance, not structural embedding). |
 | D03 | All referenced version ranges SHOULD be satisfiable by at least one known artefact version within the resolution context at the time of validation. |
 
 ### 16.7 Versioning Rules
