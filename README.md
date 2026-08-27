@@ -116,7 +116,9 @@ An enum root and its values:
   "attributes": {
     "weeklyHours": {
       "kind": "primitive",
-      "type": "uint8",
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 168,
       "name": "Weekly Hours",
       "required": true
     }

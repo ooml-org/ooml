@@ -150,7 +150,7 @@ const SCHEMA_DATATYPE_MAP: Record<string, string> = {
     Text: "string",
     Boolean: "boolean",
     Number: "float64",
-    Integer: "int64",
+    Integer: "integer",
     Float: "float64",
     Date: "date",
     Time: "time",

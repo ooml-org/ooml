@@ -273,6 +273,7 @@ The following changes are breaking and MUST increment the MAJOR version:
 - Renaming an attribute
 - Changing an attribute's `kind`
 - Narrowing an attribute's `type`
+- Narrowing an attribute's numeric bounds (raising `minimum`, lowering `maximum`, or adding either where none existed)
 - Switching a `nested` attribute between the inline `attributes` form and the type-borrowed `type` form, or changing which class a type-borrowed `nested` attribute's `type` points at (to an incompatible class not already covering the same shape)
 - Changing an attribute from optional to required
 - Changing the `valueType` or `valueKind` of a `list`, `set`, or `map` attribute
@@ -306,7 +307,8 @@ The following changes require a MINOR increment:
 *Class changes:*
 - Adding a new optional attribute
 - Adding a new class to the `extends` array
-- Widening an attribute's `type` (e.g. `int32` → `int64`)
+- Widening an attribute's `type` (e.g. `float32` → `float64`)
+- Widening an attribute's numeric bounds (raising `maximum`, lowering `minimum`, or removing either)
 - Changing a required attribute to optional
 - Adding a `deprecated` message to an inherited attribute via `use.override.deprecated`, or to an imported global attribute's own `deprecated` override (§9.9), where none existed before
 - Changing a `class` attribute's `type` to a subtype of the original
@@ -346,14 +348,7 @@ OOML defines the following built-in primitive types. Implementations MUST suppor
 | Type name | Description | Constraints |
 |-----------|-------------|-------------|
 | `boolean` | True or false | — |
-| `int8` | Signed 8-bit integer | −128 to 127 |
-| `int16` | Signed 16-bit integer | −32,768 to 32,767 |
-| `int32` | Signed 32-bit integer | −2,147,483,648 to 2,147,483,647 |
-| `int64` | Signed 64-bit integer | −2⁶³ to 2⁶³−1 |
-| `uint8` | Unsigned 8-bit integer | 0 to 255 |
-| `uint16` | Unsigned 16-bit integer | 0 to 65,535 |
-| `uint32` | Unsigned 32-bit integer | 0 to 4,294,967,295 |
-| `uint64` | Unsigned 64-bit integer | 0 to 2⁶⁴−1 |
+| `integer` | Whole number, positive or negative | `minimum` and `maximum` MAY be specified; unbounded if omitted |
 | `float32` | IEEE 754 single-precision float | — |
 | `float64` | IEEE 754 double-precision float | — |
 | `decimal` | Arbitrary-precision decimal | `precision` and `scale` MAY be specified |
@@ -366,6 +361,10 @@ OOML defines the following built-in primitive types. Implementations MUST suppor
 | `uri` | Uniform Resource Identifier | RFC 3986 |
 | `binary` | Arbitrary byte sequence | `encoding` SHOULD be specified (e.g. `"base64"`) |
 | `any` | Unconstrained value | Use sparingly; disables type checking for that attribute |
+
+The `integer` type has no inherent bounds. Where a range matters, it is stated explicitly with the `minimum` and `maximum` constraint properties (§9.2): `minimum: 0` expresses a non-negative integer, and `minimum: -128, maximum: 127` expresses a value that fits in a signed 8-bit range. These bounds describe the *portable value range* of the attribute — they are not a requirement for any particular in-memory or on-disk representation, which is a concern of the consuming implementation.
+
+`float32` and `float64` remain distinct named types because single- vs. double-precision affects rounding behaviour across the entire value range, not only at its boundaries — a difference that has no integer equivalent.
 
 ---
 
@@ -1499,7 +1498,8 @@ The following example demonstrates multi-inheritance, standalone global attribut
 	"extends": ["com.example.hr/EmploymentType@^1.0.0"],
 	"attributes": {
 		"weeklyHours": {
-			"kind": "primitive", "type": "uint8",
+			"kind": "primitive", "type": "integer",
+			"minimum": 0, "maximum": 168,
 			"name": "Weekly Hours",
 			"required": true,
 			"description": "Standard contracted weekly hours."
