@@ -260,12 +260,6 @@
 						"maximum": {
 							"type": "number"
 						},
-						"exclusiveMinimum": {
-							"type": "number"
-						},
-						"exclusiveMaximum": {
-							"type": "number"
-						},
 						"precision": {
 							"type": "integer",
 							"minimum": 1
@@ -600,12 +594,6 @@
 						"maximum": {
 							"type": "number"
 						},
-						"exclusiveMinimum": {
-							"type": "number"
-						},
-						"exclusiveMaximum": {
-							"type": "number"
-						},
 						"precision": {
 							"type": "integer",
 							"minimum": 1
@@ -800,12 +788,6 @@
 				"maximum": {
 					"type": "number"
 				},
-				"exclusiveMinimum": {
-					"type": "number"
-				},
-				"exclusiveMaximum": {
-					"type": "number"
-				},
 				"precision": {
 					"type": "integer",
 					"minimum": 1
@@ -978,12 +960,6 @@
 					"type": "number"
 				},
 				"maximum": {
-					"type": "number"
-				},
-				"exclusiveMinimum": {
-					"type": "number"
-				},
-				"exclusiveMaximum": {
 					"type": "number"
 				},
 				"precision": {

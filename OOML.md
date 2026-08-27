@@ -606,8 +606,6 @@ Additional properties that constrain the value, applicable by primitive type:
 | `pattern` | `string` | ECMA 262 regex the value MUST match. |
 | `minimum` | numeric types | Inclusive lower bound. |
 | `maximum` | numeric types | Inclusive upper bound. |
-| `exclusiveMinimum` | numeric types | Exclusive lower bound. |
-| `exclusiveMaximum` | numeric types | Exclusive upper bound. |
 | `precision` | `decimal` | Total number of significant digits. |
 | `scale` | `decimal` | Digits to the right of the decimal point. |
 | `encoding` | `binary` | Encoding hint (e.g. `"base64"`, `"hex"`). |
@@ -1169,8 +1167,8 @@ A class MAY, after renaming a name away, declare its own unrelated attribute usi
 | Property | Rule |
 |----------|------|
 | `name`, `description` | Freely overridable. No directional constraint. |
-| `minLength`, `minimum`, `minItems`, `exclusiveMinimum` | Overridable only by increasing the value (narrowing). |
-| `maxLength`, `maximum`, `maxItems`, `exclusiveMaximum`, `precision`, `scale` | Overridable only by decreasing the value (narrowing). |
+| `minLength`, `minimum`, `minItems` | Overridable only by increasing the value (narrowing). |
+| `maxLength`, `maximum`, `maxItems`, `precision`, `scale` | Overridable only by decreasing the value (narrowing). |
 | `required` | Overridable only `false → true` (narrowing). |
 | `nullable` | Overridable only `true → false` (narrowing). |
 | `pattern` | Overridable; the override is asserted to be narrower than the inherited pattern, but — unlike the properties above — this is not mechanically verified (§21, pattern containment is undecidable in general for the full ECMA 262 dialect OOML's `pattern` property uses). |
